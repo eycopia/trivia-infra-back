@@ -5,19 +5,9 @@ const { Server } = require("socket.io");
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const rateLimit = require('express-rate-limit'); // Added for rate limiting
 
 // --- CONFIGURACIÓN ---
 const app = express();
-
-// Rate Limiting para prevenir ataques de fuerza bruta o abuso de API
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
-    message: "Too many requests from this IP, please try again after 15 minutes"
-});
-
-app.use(limiter);
 
 app.use(cors({
     origin: process.env.ALLOWED_ORIGIN
@@ -404,6 +394,8 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, () => {
-    console.log('🚀 Backend corriendo en puerto 3000');
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+    console.log(`🚀 Backend corriendo en puerto ${PORT}`);
 });
