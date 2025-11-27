@@ -121,6 +121,16 @@ app.post('/api/games/:id/questions', adminAuth, async (req, res) => {
     }
 });
 
+app.delete('/api/questions/:questionId', adminAuth, async (req, res) => {
+    const { questionId } = req.params;
+    try {
+        await db.query("DELETE FROM questions WHERE id = $1", [questionId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Ganadores
 app.get('/api/winners', adminAuth, async (req, res) => {
     try {
