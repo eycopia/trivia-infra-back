@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
@@ -16,11 +17,17 @@ const io = new Server(server, {
 });
 
 // --- SEGURIDAD ADMIN ---
-const ADMIN_PASSWORD = "admin123"; // ¡CAMBIA ESTO!
-const ADMIN_TOKEN = "TOKEN_SECRETO_DEL_EVENTO_2024";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
 // --- BASE DE DATOS (SQLite) ---
-const db = new sqlite3.Database('./trivia.db');
+const db = new sqlite3.Database('./trivia.db', (err) => {
+    if (err) {
+        console.error("Error opening database:", err.message);
+    } else {
+        console.log("Connected to the SQLite database. (File will be created if it doesn't exist)");
+    }
+});
 
 db.serialize(() => {
     // Tabla Juegos
@@ -211,6 +218,11 @@ io.on('connection', (socket) => {
 
         // Enviar estado actual al que acaba de entrar
         socket.emit('GAME_STATUS', { status: session.status });
+
+        // Si el estado es RESULT, enviar también los resultados de la ronda para que vea si ganó
+        if (session.status === 'RESULT' && session.lastRoundResult) {
+            socket.emit('ROUND_RESULTS', session.lastRoundResult);
+        }
     });
 
     // 2. JUGADOR: Enviar Respuesta
@@ -253,7 +265,8 @@ io.on('connection', (socket) => {
                 currentQIndex: session.currentQuestionIdx,
                 questions: session.questions,
                 playerCount: Object.keys(session.players).length,
-                currentQuestion: session.currentQuestionIdx >= 0 ? session.questions[session.currentQuestionIdx] : null
+                currentQuestion: session.currentQuestionIdx >= 0 ? session.questions[session.currentQuestionIdx] : null,
+                lastRoundResult: session.lastRoundResult
             });
 
             // Si estamos en medio de una pregunta, enviar también el tiempo restante o estado
@@ -333,8 +346,9 @@ io.on('connection', (socket) => {
         // A. PUNTOS
         correctOnes.forEach(a => {
             let points = Math.max(10, 1000 - Math.floor(a.timeDelta / 20));
-            if (session.players[a.socketId]) {
-                session.players[a.socketId].score += points;
+            // Usar la referencia al objeto jugador para asegurar que si cambió de socket (reconectó) se actualice el score correcto
+            if (a.player) {
+                a.player.score += points;
             }
         });
 
@@ -347,23 +361,25 @@ io.on('connection', (socket) => {
 
             if (!a.player.hasWonInstant) {
                 a.player.hasWonInstant = true;
-                session.players[a.socketId].hasWonInstant = true;
+                // session.players[a.socketId] apunta al mismo objeto a.player, así que ya está actualizado
 
                 roundWinners.push(a.player);
 
-                // Guardar premio en DB
+                // Guardar premio en DB - Usamos playerId (UUID) si existe, o socketId como fallback
                 db.run("INSERT INTO winners (game_id, player_id, player_name, question_idx) VALUES (?, ?, ?, ?)",
-                    [gameId, a.socketId, a.player.name, session.currentQuestionIdx]);
+                    [gameId, a.player.playerId || a.socketId, a.player.name, session.currentQuestionIdx]);
 
                 winnersCount++;
             }
         }
 
         // Enviar resultados
-        io.to(`game_${gameId}`).emit('ROUND_RESULTS', {
+        const resultPayload = {
             correctIdx: correctAnswer,
             roundWinners: roundWinners
-        });
+        };
+        session.lastRoundResult = resultPayload; // Guardar para reconexiones
+        io.to(`game_${gameId}`).emit('ROUND_RESULTS', resultPayload);
 
         // Enviar Leaderboard
         const leaderboard = Object.values(session.players)
