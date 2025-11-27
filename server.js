@@ -236,17 +236,38 @@ io.on('connection', (socket) => {
         socket.emit('ANSWER_RECEIVED');
     });
 
-    // 3. ADMIN: Iniciar Juego (Cargar preguntas)
+    // 3. ADMIN: Iniciar Juego (Cargar preguntas) o Reconectar
     socket.on('ADMIN_INIT_GAME', (data) => {
         const { token, gameId } = data;
         if (token !== ADMIN_TOKEN) return;
 
-        socket.join(`game_${gameId}`); // <--- FIX: Unir al admin a la sala para recibir eventos
+        socket.join(`game_${gameId}`);
 
-        // Cargar preguntas de la DB para este juego
+        const session = getOrCreateGameSession(gameId);
+
+        // Si ya hay preguntas cargadas, asumimos que el juego está en curso o listo
+        if (session.questions && session.questions.length > 0) {
+            // RECONEXIÓN ADMIN
+            socket.emit('GAME_STATE_SYNC', {
+                status: session.status,
+                currentQIndex: session.currentQuestionIdx,
+                questions: session.questions,
+                playerCount: Object.keys(session.players).length,
+                currentQuestion: session.currentQuestionIdx >= 0 ? session.questions[session.currentQuestionIdx] : null
+            });
+
+            // Si estamos en medio de una pregunta, enviar también el tiempo restante o estado
+            if (session.status === 'QUESTION') {
+                // Podríamos enviar el tiempo restante si lo trackearamos en el server
+            }
+
+            return;
+        }
+
+        // INICIO NUEVO (Cargar preguntas de la DB)
         db.all("SELECT * FROM questions WHERE game_id = ?", [gameId], (err, rows) => {
             if (err) return;
-            const session = getOrCreateGameSession(gameId);
+
             session.questions = rows.map(r => ({
                 t: r.text,
                 options: JSON.parse(r.options),
@@ -255,11 +276,17 @@ io.on('connection', (socket) => {
             // Resetear estado
             session.status = 'WAITING';
             session.currentQuestionIdx = -1;
-            session.players = {}; // Ojo: esto desconecta lógicamente a jugadores si ya estaban, mejor no borrar si queremos persistencia de conexión
-            // En realidad, mejor no borrar players si ya se unieron en el lobby
-            // session.players = {}; 
+            // session.players = {}; // NO borrar jugadores, podrían estar esperando en el lobby
 
             io.to(`game_${gameId}`).emit('GAME_STATUS', { status: 'WAITING' });
+
+            // Enviar confirmación al admin
+            socket.emit('GAME_STATE_SYNC', {
+                status: 'WAITING',
+                currentQIndex: 0,
+                questions: session.questions,
+                playerCount: Object.keys(session.players).length
+            });
         });
     });
 
