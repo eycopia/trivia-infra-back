@@ -2,9 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
-const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const db = require('./db');
 
 // --- CONFIGURACIÓN ---
 const app = express();
@@ -24,53 +24,9 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN;
 
-// --- BASE DE DATOS (SQLite) ---
-const db = new sqlite3.Database('./trivia.db', (err) => {
-    if (err) {
-        console.error("Error opening database:", err.message);
-    } else {
-        console.log("Connected to the SQLite database. (File will be created if it doesn't exist)");
-    }
-});
-
-db.serialize(() => {
-    // Tabla Juegos
-    db.run(`CREATE TABLE IF NOT EXISTS games (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        description TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    // Tabla Preguntas
-    db.run(`CREATE TABLE IF NOT EXISTS questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        game_id INTEGER,
-        text TEXT,
-        options TEXT, -- JSON string
-        answer_idx INTEGER,
-        FOREIGN KEY(game_id) REFERENCES games(id)
-    )`);
-
-    // Tabla Jugadores (Ahora vinculados a un juego, aunque por simplicidad socket room maneja el estado)
-    db.run(`CREATE TABLE IF NOT EXISTS players (
-        id TEXT PRIMARY KEY, 
-        name TEXT, 
-        extra TEXT, 
-        avatar TEXT, 
-        score INTEGER DEFAULT 0
-    )`);
-
-    // Tabla Ganadores Inmediatos
-    db.run(`CREATE TABLE IF NOT EXISTS winners (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        game_id INTEGER,
-        player_id TEXT, 
-        player_name TEXT, 
-        question_idx INTEGER, 
-        claimed BOOLEAN DEFAULT 0
-    )`);
-});
+// --- BASE DE DATOS (PostgreSQL) ---
+// La conexión se maneja en db.js
+// Las tablas deben crearse ejecutando init-db.sql en Neon
 
 // --- ESTADO DEL JUEGO (En Memoria) ---
 // Ahora soportamos múltiples juegos. Key: gameId (string/int), Value: GameState
@@ -109,63 +65,79 @@ const adminAuth = (req, res, next) => {
 };
 
 // CRUD Juegos
-app.get('/api/games', (req, res) => {
-    db.all("SELECT * FROM games ORDER BY id DESC", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/games', async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM games ORDER BY id DESC");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.post('/api/games', adminAuth, (req, res) => {
+app.post('/api/games', adminAuth, async (req, res) => {
     const { title, description } = req.body;
-    db.run("INSERT INTO games (title, description) VALUES (?, ?)", [title, description], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ id: this.lastID, title, description });
-    });
+    try {
+        const result = await db.query(
+            "INSERT INTO games (title, description) VALUES ($1, $2) RETURNING id",
+            [title, description]
+        );
+        res.json({ id: result.rows[0].id, title, description });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // CRUD Preguntas
-app.get('/api/games/:id/questions', (req, res) => {
-    db.all("SELECT * FROM questions WHERE game_id = ?", [req.params.id], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+app.get('/api/games/:id/questions', async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM questions WHERE game_id = $1", [req.params.id]);
         // Parse options JSON
-        const questions = rows.map(r => ({
+        const questions = result.rows.map(r => ({
             ...r,
             options: JSON.parse(r.options)
         }));
         res.json(questions);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.post('/api/games/:id/questions', adminAuth, (req, res) => {
+app.post('/api/games/:id/questions', adminAuth, async (req, res) => {
     const { text, options, answer_idx } = req.body;
     const gameId = req.params.id;
-    db.run("INSERT INTO questions (game_id, text, options, answer_idx) VALUES (?, ?, ?, ?)",
-        [gameId, text, JSON.stringify(options), answer_idx],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
+    try {
+        const result = await db.query(
+            "INSERT INTO questions (game_id, text, options, answer_idx) VALUES ($1, $2, $3, $4) RETURNING id",
+            [gameId, text, JSON.stringify(options), answer_idx]
+        );
 
-            // Si la sesión está activa, actualizar preguntas en memoria (opcional, pero bueno para consistencia)
-            if (gameSessions[gameId]) {
-                // Recargar preguntas es complejo si el juego corre, mejor solo para juegos nuevos/reiniciados
-            }
-            res.json({ id: this.lastID });
-        });
+        // Si la sesión está activa, actualizar preguntas en memoria (opcional, pero bueno para consistencia)
+        if (gameSessions[gameId]) {
+            // Recargar preguntas es complejo si el juego corre, mejor solo para juegos nuevos/reiniciados
+        }
+        res.json({ id: result.rows[0].id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Ganadores
-app.get('/api/winners', adminAuth, (req, res) => {
-    db.all("SELECT * FROM winners ORDER BY id DESC", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.get('/api/winners', adminAuth, async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM winners ORDER BY id DESC");
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.post('/api/winners/:id/claim', adminAuth, (req, res) => {
-    db.run("UPDATE winners SET claimed = 1 WHERE id = ?", [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
+app.post('/api/winners/:id/claim', adminAuth, async (req, res) => {
+    try {
+        await db.query("UPDATE winners SET claimed = TRUE WHERE id = $1", [req.params.id]);
         res.json({ success: true });
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 
@@ -213,8 +185,10 @@ io.on('connection', (socket) => {
             };
 
             // Persistir jugador en DB
-            db.run("INSERT OR REPLACE INTO players (id, name, extra, avatar) VALUES (?, ?, ?, ?)",
-                [playerId || socket.id, name, extra, avatar]);
+            db.query(
+                "INSERT INTO players (id, name, extra, avatar) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET name = $2, extra = $3, avatar = $4",
+                [playerId || socket.id, name, extra, avatar]
+            ).catch(err => console.error('Error guardando jugador:', err));
         }
 
         // Avisar a todos en la sala cuantos hay
@@ -282,29 +256,29 @@ io.on('connection', (socket) => {
         }
 
         // INICIO NUEVO (Cargar preguntas de la DB)
-        db.all("SELECT * FROM questions WHERE game_id = ?", [gameId], (err, rows) => {
-            if (err) return;
+        db.query("SELECT * FROM questions WHERE game_id = $1", [gameId])
+            .then(result => {
+                session.questions = result.rows.map(r => ({
+                    t: r.text,
+                    options: JSON.parse(r.options),
+                    ans: r.answer_idx
+                }));
+                // Resetear estado
+                session.status = 'WAITING';
+                session.currentQuestionIdx = -1;
+                // session.players = {}; // NO borrar jugadores, podrían estar esperando en el lobby
 
-            session.questions = rows.map(r => ({
-                t: r.text,
-                options: JSON.parse(r.options),
-                ans: r.answer_idx
-            }));
-            // Resetear estado
-            session.status = 'WAITING';
-            session.currentQuestionIdx = -1;
-            // session.players = {}; // NO borrar jugadores, podrían estar esperando en el lobby
+                io.to(`game_${gameId}`).emit('GAME_STATUS', { status: 'WAITING' });
 
-            io.to(`game_${gameId}`).emit('GAME_STATUS', { status: 'WAITING' });
-
-            // Enviar confirmación al admin
-            socket.emit('GAME_STATE_SYNC', {
-                status: 'WAITING',
-                currentQIndex: 0,
-                questions: session.questions,
-                playerCount: Object.keys(session.players).length
-            });
-        });
+                // Enviar confirmación al admin
+                socket.emit('GAME_STATE_SYNC', {
+                    status: 'WAITING',
+                    currentQIndex: 0,
+                    questions: session.questions,
+                    playerCount: Object.keys(session.players).length
+                });
+            })
+            .catch(err => console.error('Error cargando preguntas:', err));
     });
 
     // 4. ADMIN: Iniciar Pregunta
@@ -370,8 +344,10 @@ io.on('connection', (socket) => {
                 roundWinners.push(a.player);
 
                 // Guardar premio en DB - Usamos playerId (UUID) si existe, o socketId como fallback
-                db.run("INSERT INTO winners (game_id, player_id, player_name, question_idx) VALUES (?, ?, ?, ?)",
-                    [gameId, a.player.playerId || a.socketId, a.player.name, session.currentQuestionIdx]);
+                db.query(
+                    "INSERT INTO winners (game_id, player_id, player_name, question_idx) VALUES ($1, $2, $3, $4)",
+                    [gameId, a.player.playerId || a.socketId, a.player.name, session.currentQuestionIdx]
+                ).catch(err => console.error('Error guardando ganador:', err));
 
                 winnersCount++;
             }
