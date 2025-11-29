@@ -1,11 +1,15 @@
 -- Script de inicialización de base de datos PostgreSQL para Trivia App
 -- Ejecutar este script en tu base de datos de Neon una sola vez
-
+CREATE TYPE game_kind_enum AS ENUM ('questions', 'lottery');
 -- Tabla de Juegos
 CREATE TABLE IF NOT EXISTS games (
     id SERIAL PRIMARY KEY,
     title TEXT,
     description TEXT,
+    winners SMALLINT,
+    game_kind game_kind_enum,
+    avoid_winners boolean default true,
+    total_winners SMALLINT default 3,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
