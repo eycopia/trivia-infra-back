@@ -23,20 +23,19 @@ function registerAdminEvents(io, sessionManager) {
             try {
                 const session = await sessionManager.loadGameData(gameId);
 
-                // Si ya hay preguntas cargadas, es una reconexión
-                if (session.questions && session.questions.length > 0) {
-                    socket.emit('GAME_STATE_SYNC', {
-                        status: session.status,
-                        currentQIndex: session.currentQuestionIdx,
-                        questions: session.questions,
-                        playerCount: PlayerManager.getPlayerCount(session),
-                        currentQuestion: session.currentQuestionIdx >= 0
-                            ? session.questions[session.currentQuestionIdx]
-                            : null,
-                        lastRoundResult: session.lastRoundResult,
-                        gameSettings: session.gameSettings
-                    });
-                }
+                // Siempre enviar sincronización, independientemente del tipo de juego
+                socket.emit('GAME_STATE_SYNC', {
+                    status: session.status,
+                    currentQIndex: session.currentQuestionIdx,
+                    questions: session.questions || [],
+                    playerCount: PlayerManager.getPlayerCount(session),
+                    players: Object.values(session.players), // Enviar lista completa de jugadores
+                    currentQuestion: (session.questions && session.currentQuestionIdx >= 0)
+                        ? session.questions[session.currentQuestionIdx]
+                        : null,
+                    lastRoundResult: session.lastRoundResult,
+                    gameSettings: session.gameSettings
+                });
 
                 // Notificar a todos el estado
                 io.to(`game_${gameId}`).emit('GAME_STATUS', { status: session.status });

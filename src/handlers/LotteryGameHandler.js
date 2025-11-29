@@ -36,7 +36,8 @@ class LotteryGameHandler {
         // Preparar y enviar resultados
         const resultPayload = {
             lotteryWinners: lotteryWinners,
-            isLottery: true
+            isLottery: true,
+            playersPool: allPlayers.map(p => ({ name: p.name, avatar: p.avatar }))
         };
         session.lastRoundResult = resultPayload;
         io.to(`game_${gameId}`).emit('LOTTERY_RESULTS', resultPayload);
