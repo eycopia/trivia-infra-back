@@ -4,6 +4,7 @@ const WinnerManager = require('../managers/WinnerManager');
  * Maneja la lógica de juegos tipo "lottery"
  */
 class LotteryGameHandler {
+
     /**
      * Ejecuta el sorteo de un juego tipo lottery
      * @param {Object} session - Sesión del juego

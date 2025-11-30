@@ -38,8 +38,8 @@ app.use('/api/winners', adminAuth, winnersRouter);
 registerPlayerEvents(io, sessionManager);
 registerAdminEvents(io, sessionManager);
 
-// --- INICIAR SERVIDOR ---
-server.listen(config.PORT, () => {
+// '0.0.0.0'
+server.listen(config.PORT,() => {
     console.log(`🚀 Backend corriendo en puerto ${config.PORT}`);
 });
 
