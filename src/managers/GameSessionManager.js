@@ -93,6 +93,24 @@ class GameSessionManager {
     getSession(gameId) {
         return this.sessions[gameId] || null;
     }
+
+    /**
+     * Elimina un jugador de cualquier sesión activa dado su socketId
+     * @param {string} socketId - ID del socket del jugador a eliminar
+     * @returns {Object|null} Objeto con { gameId, player } si se eliminó, o null
+     */
+    removePlayer(socketId) {
+        for (const gameId in this.sessions) {
+            const session = this.sessions[gameId];
+            if (session.players && session.players[socketId]) {
+                const player = session.players[socketId];
+                delete session.players[socketId];
+                console.log(`Jugador ${player.name} eliminado de la sesión ${gameId}`);
+                return { gameId, player };
+            }
+        }
+        return null;
+    }
 }
 
 module.exports = GameSessionManager;

@@ -64,6 +64,21 @@ function registerPlayerEvents(io, sessionManager) {
                 socket.emit('ANSWER_RECEIVED');
             }
         });
+
+        /**
+         * Evento: Desconexión
+         */
+        socket.on('disconnect', () => {
+            const result = sessionManager.removePlayer(socket.id);
+            if (result) {
+                const { gameId, player } = result;
+                const session = sessionManager.getSession(gameId);
+                if (session) {
+                    // Avisar a todos que el jugador salió (actualizando el conteo)
+                    io.to(`game_${gameId}`).emit('PLAYERS_UPDATE', PlayerManager.getPlayerCount(session));
+                }
+            }
+        });
     });
 }
 
