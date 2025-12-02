@@ -10,6 +10,7 @@ const GameSessionManager = require('./src/managers/GameSessionManager');
 const { router: adminRouter, adminAuth } = require('./src/routes/admin.routes');
 const gamesRouter = require('./src/routes/games.routes');
 const winnersRouter = require('./src/routes/winners.routes');
+const userRouter = require('./src/routes/user.routes');
 const registerPlayerEvents = require('./src/sockets/playerEvents');
 const registerAdminEvents = require('./src/sockets/adminEvents');
 
@@ -31,6 +32,7 @@ const sessionManager = new GameSessionManager();
 
 // --- RUTAS HTTP ---
 app.use('/api', adminRouter);
+app.use('/api/list-games', userRouter);
 app.use('/api/games', adminAuth, gamesRouter);
 app.use('/api/winners', adminAuth, winnersRouter);
 
@@ -39,7 +41,7 @@ registerPlayerEvents(io, sessionManager);
 registerAdminEvents(io, sessionManager);
 
 // '0.0.0.0'
-server.listen(config.PORT,() => {
+server.listen(config.PORT, () => {
     console.log(`🚀 Backend corriendo en puerto ${config.PORT}`);
 });
 

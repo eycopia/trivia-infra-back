@@ -8,13 +8,13 @@ const router = express.Router();
  * Crear un nuevo juego
  */
 router.post('/', async (req, res) => {
-    const { title, description, winners, game_kind, avoid_winners, total_winners } = req.body;
+    const { title, description, winners, game_kind, avoid_winners } = req.body;
     try {
         const result = await db.query(
-            `INSERT INTO games (title, description, winners, game_kind, avoid_winners, total_winners) 
-             VALUES ($1, $2, $3, $4, COALESCE($5, true), COALESCE($6, 3)) 
+            `INSERT INTO games (title, description, winners, game_kind, avoid_winners) 
+             VALUES ($1, $2, $3, $4, COALESCE($5, true)) 
              RETURNING *`,
-            [title, description, winners, game_kind, avoid_winners, total_winners]
+            [title, description, winners, game_kind, avoid_winners]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -63,15 +63,15 @@ router.post('/:id/questions', async (req, res) => {
  */
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
-    const { title, description, winners, game_kind, avoid_winners, total_winners } = req.body;
+    const { title, description, winners, game_kind, avoid_winners } = req.body;
     try {
         const result = await db.query(
             `UPDATE games 
              SET title = $1, description = $2, winners = $3, game_kind = $4, 
-                 avoid_winners = $5, total_winners = $6
-             WHERE id = $7
+                 avoid_winners = $5
+             WHERE id = $6
              RETURNING *`,
-            [title, description, winners, game_kind, avoid_winners, total_winners, id]
+            [title, description, winners, game_kind, avoid_winners, id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Juego no encontrado' });

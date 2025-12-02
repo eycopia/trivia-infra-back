@@ -54,7 +54,6 @@ class GameSessionManager {
         const game = gameResult.rows[0];
         session.gameSettings = {
             avoid_winners: game.avoid_winners,
-            total_winners: game.total_winners,
             winners: game.winners,
             game_kind: game.game_kind
         };

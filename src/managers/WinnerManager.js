@@ -14,6 +14,9 @@ class WinnerManager {
      */
     static async selectQuestionWinners(correctAnswers, gameSettings, gameId, questionIdx) {
         const { winners = 1, avoid_winners = true } = gameSettings;
+        console.log(`[WinnerManager] Selecting winners. Settings: winners=${winners}, avoid=${avoid_winners}`);
+        console.log(`[WinnerManager] Correct answers candidates: ${correctAnswers.length}`);
+
         const roundWinners = [];
         let winnersCount = 0;
 
@@ -27,6 +30,7 @@ class WinnerManager {
             if (avoid_winners) {
                 const hasWonBefore = await this.hasPlayerWonBefore(player.playerId || player.id);
                 if (hasWonBefore) {
+                    console.log(`[WinnerManager] Player ${player.name} skipped (already won)`);
                     continue; // Saltar este jugador
                 }
             }
@@ -39,6 +43,7 @@ class WinnerManager {
             winnersCount++;
         }
 
+        console.log(`[WinnerManager] Selected ${roundWinners.length} winners`);
         return roundWinners;
     }
 
@@ -50,7 +55,7 @@ class WinnerManager {
      * @returns {Promise<Array>} Lista de ganadores
      */
     static async selectLotteryWinners(allPlayers, gameSettings, gameId) {
-        const { total_winners = 3, avoid_winners = true } = gameSettings;
+        const { winners = 3, avoid_winners = true } = gameSettings;
         const roundWinners = [];
 
         // Crear copia del array de jugadores
@@ -73,7 +78,7 @@ class WinnerManager {
         }
 
         // Seleccionar ganadores aleatorios
-        const numWinners = Math.min(total_winners, availablePlayers.length);
+        const numWinners = Math.min(winners, availablePlayers.length);
 
         for (let i = 0; i < numWinners; i++) {
             const randomIndex = Math.floor(Math.random() * availablePlayers.length);
