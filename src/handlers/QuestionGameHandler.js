@@ -20,10 +20,10 @@ class QuestionGameHandler {
         session.currentQuestionIdx = qIndex;
         session.questionStartTime = Date.now();
         session.currentAnswers = [];
-
+        // console.log("dentro de question! ", session)
         // Limpiar flag de respuesta
         Object.values(session.players).forEach(p => p.hasAnsweredThisRound = false);
-
+        //console.log("start question: ", qIndex);
         // Enviar pregunta a todos los jugadores
         io.to(`game_${gameId}`).emit('NEW_QUESTION', {
             t: session.questions[qIndex].t,

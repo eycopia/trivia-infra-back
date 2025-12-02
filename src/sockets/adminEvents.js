@@ -55,8 +55,9 @@ function registerAdminEvents(io, sessionManager) {
 
             const session = sessionManager.getSession(gameId);
             if (!session) return;
-
+            // console.log("vaya debi inicia: ", qIndex);
             try {
+                //   console.log("start question: ", qIndex);
                 QuestionGameHandler.startQuestion(session, qIndex, io, gameId);
             } catch (err) {
                 console.error('Error iniciando pregunta:', err);
@@ -96,6 +97,32 @@ function registerAdminEvents(io, sessionManager) {
                 await LotteryGameHandler.executeLottery(session, io, gameId);
             } catch (err) {
                 console.error('Error ejecutando lottery:', err);
+                socket.emit('ADMIN_ERROR', { message: err.message });
+            }
+        });
+
+        /**
+         * Evento: Admin termina el juego
+         */
+        socket.on('ADMIN_FINISH_GAME', async (data) => {
+            const { token, gameId } = data;
+            if (token !== config.ADMIN_TOKEN) return;
+
+            const session = sessionManager.getSession(gameId);
+            if (!session) return;
+
+            try {
+                // Actualizar DB
+                await require('../../db').query("UPDATE games SET status = 'FINISHED' WHERE id = $1", [gameId]);
+
+                // Actualizar sesión
+                sessionManager.setStatus(gameId, 'FINISHED');
+
+                // Notificar a todos
+                io.to(`game_${gameId}`).emit('GAME_STATUS', { status: 'FINISHED' });
+
+            } catch (err) {
+                console.error('Error terminando juego:', err);
                 socket.emit('ADMIN_ERROR', { message: err.message });
             }
         });

@@ -59,6 +59,11 @@ class GameSessionManager {
             game_kind: game.game_kind
         };
 
+        // Si el juego ya finalizó en DB, marcar sesión como FINISHED
+        if (game.status === 'FINISHED') {
+            session.status = 'FINISHED';
+        }
+
         session.questions = questionsResult.rows.map(r => ({
             id: r.id,
             t: r.text,

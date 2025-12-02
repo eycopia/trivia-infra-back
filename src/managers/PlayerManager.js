@@ -25,15 +25,19 @@ class PlayerManager {
             delete session.players[existingPlayer.id];
             existingPlayer.id = socketId;
             session.players[socketId] = existingPlayer;
-            console.log(`Jugador ${name} reconectado (Socket: ${socketId})`);
+            //console.log(`Jugador ${name} reconectado (Socket: ${socketId})`);
             return existingPlayer;
         } else {
             // NUEVO JUGADOR
+            // Estandarizar datos: minúsculas y límite de longitud
+            const cleanName = (name || '').trim().toLowerCase().substring(0, 12);
+            const cleanExtra = (extra || '').trim().toLowerCase();
+
             const newPlayer = {
                 id: socketId,
                 playerId: playerId || socketId,
-                name,
-                extra,
+                name: cleanName,
+                extra: cleanExtra,
                 avatar
             };
             session.players[socketId] = newPlayer;
